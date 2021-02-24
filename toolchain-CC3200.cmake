@@ -1,13 +1,13 @@
-### BEGIN CMAKE_TOOLCHAIN_FILE
-# "Generic" is used when cross compiling ½»²æ±àÒëÊ¹ÓÃGeneric
+ï»¿### BEGIN CMAKE_TOOLCHAIN_FILE
+# "Generic" is used when cross compiling ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ê¹ï¿½ï¿½Generic
 set(CMAKE_SYSTEM_NAME Generic)
 
-# Set the EW installation root directory ÉèÖÃEW°²×°Â·¾¶
+# Set the EW installation root directory ï¿½ï¿½ï¿½ï¿½EWï¿½ï¿½×°Â·ï¿½ï¿½
 #(Avoid spaces in the path or you need to escape them)
 set(EW_ROOT_DIR "F:/ti/IAR/arm")
 
 # Compiler flags needed to compile for this CPU
-# set(CPU_FLAGS "--cpu ARM9E")
+# set(CPU_FLAGS "--cpu cortex-m4")
 
 # Set up the CMake variables for compiler and assembler
 # (The reason for both C and CXX variables is that CMake
