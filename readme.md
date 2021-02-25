@@ -1,5 +1,6 @@
-ffrdp 是一个基于 udp + arq + fec 的快速可靠协议
-
+### eegRudp
+eegRudp是一个跨平台（单片机/Linux/Windows）的基于 udp + arq + fec 的快速可靠协议
+##### 原理分析
 rto(Retransmission Timeout) 计算：
 初始：
 rtts = rttm;
@@ -47,15 +48,12 @@ fec_seq 长度为 16bit 用于 FEC
 
 una+mack 的方式被用于选择重传和快速重传
 
-
 FEC 说明：
 采用异或方式实现 FEC
 针对 full frame 即帧长度为 MTU 的帧，进行 FEC 纠错
 data frame 的最后两个字节用作 FEC 的 seq.
 
+##### 构建过程
+[项目构建过程](https://blog.csdn.net/qq_33271192/article/details/114012316)
 
-rockcarry
-2020-9-1
-
-
-
+##### 性能测试
