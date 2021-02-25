@@ -28,7 +28,7 @@ SET_TARGET_PROPERTIES (eegdp_shared PROPERTIES CLEAN_DIRECT_OUTPUT 1)
 SET_TARGET_PROPERTIES (eegdp_static PROPERTIES VERSION 1.1 SOVERSION 1)
 SET_TARGET_PROPERTIES (eegdp_shared PROPERTIES VERSION 1.1 SOVERSION 1)
 
-# 添加连接库
+# 添加连接库(socket)
 IF (WIN32)
 TARGET_LINK_LIBRARIES(eegdp_static Ws2_32.lib)
 TARGET_LINK_LIBRARIES(eegdp_shared Ws2_32.lib)
@@ -36,6 +36,11 @@ TARGET_LINK_LIBRARIES(eegdp_static winmm.lib)
 TARGET_LINK_LIBRARIES(eegdp_shared winmm.lib)
 ADD_DEFINITIONS(-D WIN32)
 ELSEIF(UNIX)
-ELSE() #CC3200
+ELSE() #CC3200链接库
+ADD_DEFINITIONS(-D CC3200)
+include_directories("${PROJECT_SOURCE_DIR}/../../simplelink/include")
+include_directories("${PROJECT_SOURCE_DIR}/../../driverlib")
+TARGET_LINK_LIBRARIES(eegdp_static "${PROJECT_SOURCE_DIR}/../../simplelink/ewarm/OS/Exe/simplelink.a")
+TARGET_LINK_LIBRARIES(eegdp_static "${PROJECT_SOURCE_DIR}/../../driverlib/ewarm/Release/Exe/driverlib.a")
 ENDIF()
 

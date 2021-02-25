@@ -13,7 +13,7 @@
 #define usleep(t) Sleep((t) / 1000)
 #define get_tick_count GetTickCount
 #pragma warning(disable:4996) // disable warnings
-#else
+#elif UNIX
 #include <time.h>
 #include <unistd.h>
 #include <fcntl.h>
@@ -30,6 +30,66 @@ static uint32_t get_tick_count()
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
     return (ts.tv_sec * 1000 + ts.tv_nsec / 1000000);
+}
+#else
+#include <systick.h>
+#include <socket.h>
+#include <utils.h>
+#define SOCKET int
+#define closesocket close
+#define stricmp strcasecmp
+#define strtok_s strtok_r
+/*
+ *  For clockId = CLOCK_REALTIME, clock_gettime() and clock_settime() use
+ *  the BIOS Seconds module to get/set the time.  Before using clock_gettime()
+ *  with clockId = CLOCK_REALTIME, the Seconds module must be initialized.
+ *  This can be done by either calling clock_settime(CLOCK_REALTIME,...),
+ *  or Seconds_set().
+ *  For clockId = CLOCK_MONOTONIC, clock_gettime() returns a time based on
+ *  ti.sysbios.knl.Clock ticks.
+ */
+
+static uint32_t local_clock = 0;
+
+static void systick_handler(){
+    local_clock += 10;
+}
+static void systick_init(){
+    SysTickIntRegister(systick_handler);
+    SysTickPeriodSet(799);//10us
+    SysTickIntEnable();
+}
+static uint32_t get_tick_count()
+{
+    return local_clock;
+}
+
+//add noblock attr to window size attr
+#define SO_RCVBUF SL_SO_RCVBUF
+#define SO_SNDBUF SL_SO_RCVBUF
+void usleep(int pe){
+    int cnt = (pe >> 1);
+    for(int i = 0;i < cnt; i ++){
+        //delay 2us
+        UtilsDelay(21);
+    }
+}
+
+//convet ip string to ip long 
+unsigned long inet_addr(const char *str)
+{
+    unsigned long lHost = 0;
+    char *pLong = (char *)&lHost;
+    char substr[20] = { 0 };
+    strncpy(substr, str, sizeof(substr));
+    char *p = strtok(substr, ".");
+    while (p != NULL)
+    {
+        *pLong++ = atoi(p);
+        p = strtok(NULL, "."); // 获取下一个片段
+    }
+ 
+    return lHost;
 }
 #endif
 
@@ -331,6 +391,8 @@ void* ffrdp_init(char *ip, int port, char *txkey, char *rxkey, int server, int s
         printf("WSAStartup failed !\n");
         return NULL;
     }
+#elif CC3200
+    systick_init();
 #endif
 
     ffrdp->swnd     = FFRDP_DEF_CWND_SIZE;
@@ -356,13 +418,19 @@ void* ffrdp_init(char *ip, int port, char *txkey, char *rxkey, int server, int s
 #ifdef WIN32
     // setup non-block io mode
     opt = 1; ioctlsocket(ffrdp->udp_fd, FIONBIO, &opt); 
-#else
+#elif UNIX
     // setup non-block io mode
     fcntl(ffrdp->udp_fd, F_SETFL, fcntl(ffrdp->udp_fd, F_GETFL, 0) | O_NONBLOCK); 
+#else
+    //setup non-block io mode
+    opt = 1;
+    sl_SetSockOpt(ffrdp->udp_fd, SL_SOL_SOCKET, SL_SO_NONBLOCKING,&opt, sizeof(opt));
 #endif
     opt = FFRDP_UDPSBUF_SIZE; setsockopt(ffrdp->udp_fd, SOL_SOCKET, SO_SNDBUF   , (char*)&opt, sizeof(int)); // setup udp send buffer size
     opt = FFRDP_UDPRBUF_SIZE; setsockopt(ffrdp->udp_fd, SOL_SOCKET, SO_RCVBUF   , (char*)&opt, sizeof(int)); // setup udp recv buffer size
+#ifndef CC3200    
     opt = 1;                  setsockopt(ffrdp->udp_fd, SOL_SOCKET, SO_REUSEADDR, (char*)&opt, sizeof(int)); // setup reuse addr
+#endif
 
     if (server) {
         ffrdp->flags |= FLAG_SERVER;
@@ -519,7 +587,11 @@ void ffrdp_update(void *ctxt)
     FFRDPCONTEXT       *ffrdp   = (FFRDPCONTEXT*)ctxt;
     FFRDP_FRAME_NODE   *node    = NULL, *p = NULL, *t = NULL;
     struct sockaddr_in *dstaddr = NULL, srcaddr;
+#ifndef CC3200
     uint32_t addrlen = sizeof(srcaddr);
+#else
+    uint16_t addrlen = sizeof(srcaddr);
+#endif
     int32_t  una, mack, ret, got_data = 0, got_query = 0, send_una, send_mack = 0, recv_una, dist, maxack, i;
     uint8_t  data[8];
 
