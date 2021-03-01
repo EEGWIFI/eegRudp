@@ -97,6 +97,7 @@ unsigned long inet_addr(const char *str)
 }
 #endif
 
+#ifndef CC3200
 #define FFRDP_MAX_MSS       (1500 - 8) // should align to 4 bytes and <= 1500 - 8
 #define FFRDP_MIN_RTO        20
 #define FFRDP_MAX_RTO        2000
@@ -113,6 +114,26 @@ unsigned long inet_addr(const char *str)
 #define FFRDP_SELECT_SLEEP   0
 #define FFRDP_SELECT_TIMEOUT 10000
 #define FFRDP_USLEEP_TIMEOUT 1000
+#else
+#define FFRDP_MAX_MSS       (1500 - 8) // should align to 4 bytes and <= 1500 - 8
+#define FFRDP_MIN_RTO        20
+#define FFRDP_MAX_RTO        2000
+#define FFRDP_MAX_WAITSND    32
+#define FFRDP_QUERY_CYCLE    500
+#define FFRDP_FLUSH_TIMEOUT  500
+#define FFRDP_DEAD_TIMEOUT   5000
+#define FFRDP_MIN_CWND_SIZE  1
+#define FFRDP_DEF_CWND_SIZE  32
+#define FFRDP_MAX_CWND_SIZE  64
+#define FFRDP_RECVBUF_SIZE  (2 * (FFRDP_MAX_MSS + 0))
+#define FFRDP_UDPSBUF_SIZE  (1  * (FFRDP_MAX_MSS + 6))
+#define FFRDP_UDPRBUF_SIZE  (2 * (FFRDP_MAX_MSS + 6))
+#define FFRDP_SELECT_SLEEP   0
+#define FFRDP_SELECT_TIMEOUT 10000
+#define FFRDP_USLEEP_TIMEOUT 1000
+#endif
+
+
 
 #define MIN(a, b)               ((a) < (b) ? (a) : (b))
 #define MAX(a, b)               ((a) > (b) ? (a) : (b))
