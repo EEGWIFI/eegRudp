@@ -35,10 +35,14 @@ static uint32_t get_tick_count()
 #include <systick.h>
 #include <socket.h>
 #include <utils.h>
+#include <osi.h>
 #define SOCKET int
 #define closesocket close
 #define stricmp strcasecmp
 #define strtok_s strtok_r
+#define free mem_Free
+#define calloc mem_Malloc
+#define malloc mem_Malloc
 /*
  *  For clockId = CLOCK_REALTIME, clock_gettime() and clock_settime() use
  *  the BIOS Seconds module to get/set the time.  Before using clock_gettime()
@@ -382,7 +386,7 @@ void* ffrdp_init(char *ip, int port, char *txkey, char *rxkey, int server, int s
     WSADATA wsaData;
 #endif
     unsigned long opt;
-    FFRDPCONTEXT *ffrdp = calloc(1, sizeof(FFRDPCONTEXT));
+    FFRDPCONTEXT *ffrdp = malloc(sizeof(FFRDPCONTEXT));
     if (!ffrdp) return NULL;
 
 #ifdef WIN32
@@ -588,7 +592,7 @@ void ffrdp_update(void *ctxt)
     FFRDP_FRAME_NODE   *node    = NULL, *p = NULL, *t = NULL;
     struct sockaddr_in *dstaddr = NULL, srcaddr;
 #ifndef CC3200
-    uint32_t addrlen = sizeof(srcaddr);
+    uint16_t addrlen = sizeof(srcaddr);
 #else
     uint16_t addrlen = sizeof(srcaddr);
 #endif

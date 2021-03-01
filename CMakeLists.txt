@@ -40,7 +40,9 @@ ELSE() #CC3200Á´½Ó¿â
 ADD_DEFINITIONS(-D CC3200)
 include_directories("${PROJECT_SOURCE_DIR}/../../simplelink/include")
 include_directories("${PROJECT_SOURCE_DIR}/../../driverlib")
+include_directories("${PROJECT_SOURCE_DIR}/../../oslib")
 TARGET_LINK_LIBRARIES(eegdp_static "${PROJECT_SOURCE_DIR}/../../simplelink/ewarm/OS/Exe/simplelink.a")
 TARGET_LINK_LIBRARIES(eegdp_static "${PROJECT_SOURCE_DIR}/../../driverlib/ewarm/Release/Exe/driverlib.a")
+TARGET_LINK_LIBRARIES(eegdp_static "${PROJECT_SOURCE_DIR}/../../oslib/ewarm/free_rtos/Exe")
 ENDIF()
 
