@@ -56,11 +56,11 @@ static uint32_t get_tick_count()
 static uint32_t local_clock = 0;
 
 static void systick_handler(){
-    local_clock += 10;
+    local_clock ++;
 }
 static void systick_init(){
     SysTickIntRegister(systick_handler);
-    SysTickPeriodSet(799);//10us
+    SysTickPeriodSet(79999);//1ms
     SysTickIntEnable();
 }
 static uint32_t get_tick_count()
@@ -115,7 +115,7 @@ unsigned long inet_addr(const char *str)
 #define FFRDP_SELECT_TIMEOUT 10000
 #define FFRDP_USLEEP_TIMEOUT 1000
 #else
-#define FFRDP_MAX_MSS       (1500 - 8) // should align to 4 bytes and <= 1500 - 8
+#define FFRDP_MAX_MSS       (128) // should align to 4 bytes and <= 1500 - 8
 #define FFRDP_MIN_RTO        20
 #define FFRDP_MAX_RTO        2000
 #define FFRDP_MAX_WAITSND    32
@@ -125,9 +125,9 @@ unsigned long inet_addr(const char *str)
 #define FFRDP_MIN_CWND_SIZE  1
 #define FFRDP_DEF_CWND_SIZE  32
 #define FFRDP_MAX_CWND_SIZE  64
-#define FFRDP_RECVBUF_SIZE  (2 * (FFRDP_MAX_MSS + 0))
-#define FFRDP_UDPSBUF_SIZE  (1  * (FFRDP_MAX_MSS + 6))
-#define FFRDP_UDPRBUF_SIZE  (2 * (FFRDP_MAX_MSS + 6))
+#define FFRDP_RECVBUF_SIZE  (16 * (FFRDP_MAX_MSS + 0))
+#define FFRDP_UDPSBUF_SIZE  (8  * (FFRDP_MAX_MSS + 6))
+#define FFRDP_UDPRBUF_SIZE  (16 * (FFRDP_MAX_MSS + 6))
 #define FFRDP_SELECT_SLEEP   0
 #define FFRDP_SELECT_TIMEOUT 10000
 #define FFRDP_USLEEP_TIMEOUT 1000
@@ -256,7 +256,7 @@ static FFRDP_FRAME_NODE* frame_node_new(int type, int size) // create a new fram
 {
     FFRDP_FRAME_NODE *node = malloc(sizeof(FFRDP_FRAME_NODE) + 4 + size + (type <= FFRDP_FRAME_TYPE_SHORT ? 0 : 2));
     if (!node) return NULL;
-    memset(node, 0, sizeof(FFRDP_FRAME_NODE));
+    memset(node, 0, sizeof(FFRDP_FRAME_NODE) + 4 + size + (type <= FFRDP_FRAME_TYPE_SHORT ? 0 : 2));
     node->size    = 4 + size + (type <= FFRDP_FRAME_TYPE_SHORT ? 0 : 2);
     node->data    = (uint8_t*)node + sizeof(FFRDP_FRAME_NODE);
     node->data[0] = type;
@@ -409,11 +409,11 @@ void* ffrdp_init(char *ip, int port, char *txkey, char *rxkey, int server, int s
     unsigned long opt;
     FFRDPCONTEXT *ffrdp = malloc(sizeof(FFRDPCONTEXT));
     if (!ffrdp) return NULL;
-
+    memset(ffrdp,0,sizeof(FFRDPCONTEXT));
 #ifdef WIN32
     timeBeginPeriod(1);
     if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
-        printf("WSAStartup failed !\n");
+        //printf("WSAStartup failed !\n");
         return NULL;
     }
 #elif CC3200
@@ -432,11 +432,12 @@ void* ffrdp_init(char *ip, int port, char *txkey, char *rxkey, int server, int s
     ffrdp->fec_txredundancy = MAX(0, MIN(sfec, FFRDP_FRAME_TYPE_FEC32));    
     ffrdp->tick_ffrdp_dump  = get_tick_count();
     ffrdp->server_addr.sin_family      = AF_INET;
-    ffrdp->server_addr.sin_port        = htons(port);
-    ffrdp->server_addr.sin_addr.s_addr = inet_addr(ip);
+    ffrdp->server_addr.sin_port        = htons((unsigned short)port);
+    ffrdp->server_addr.sin_addr.s_addr = htonl((unsigned int)ipToNum(ip));
     ffrdp->udp_fd = socket(AF_INET, SOCK_DGRAM, 0);
+    
     if (ffrdp->udp_fd < 0) {
-        printf("failed to open socket !\n");
+        //printf("failed to open socket !\n");
         goto failed;
     }
 
@@ -460,7 +461,7 @@ void* ffrdp_init(char *ip, int port, char *txkey, char *rxkey, int server, int s
     if (server) {
         ffrdp->flags |= FLAG_SERVER;
         if (bind(ffrdp->udp_fd, (struct sockaddr*)&ffrdp->server_addr, sizeof(ffrdp->server_addr)) == -1) {
-            printf("failed to bind !\n");
+            //printf("failed to bind !\n");
             goto failed;
         }
     }
@@ -477,8 +478,16 @@ void* ffrdp_init(char *ip, int port, char *txkey, char *rxkey, int server, int s
         AES_set_decrypt_key((uint8_t*)rxkey, 256, &ffrdp->aes_decrypt_key);
 #endif
     }
+    /* test
+    char data[10] = {"123123"};
+    int i = 100;
+    while(i --){
+      sendto(ffrdp->udp_fd, data, sizeof(data), 0, (struct sockaddr*)&ffrdp->server_addr, sizeof(ffrdp->server_addr));
+      usleep(1000);
+    }
+    */
     return ffrdp;
-
+    
 failed:
     if (ffrdp->udp_fd > 0) closesocket(ffrdp->udp_fd);
     free(ffrdp);
@@ -504,6 +513,7 @@ int ffrdp_send(void *ctxt, char *buf, int len)
 {
     FFRDPCONTEXT *ffrdp = (FFRDPCONTEXT*)ctxt;
     int           n = len, size;
+    ffrdp->cur_new_tick = get_tick_count();
     if (  !ffrdp || ((ffrdp->flags & FLAG_SERVER) && (ffrdp->flags & FLAG_CONNECTED) == 0)
         || ((len + ffrdp->smss - 1) / ffrdp->smss + ffrdp->wait_snd > FFRDP_MAX_WAITSND)) {
         if (ffrdp) ffrdp->counter_send_failed++;
@@ -524,7 +534,7 @@ int ffrdp_send(void *ctxt, char *buf, int len)
             ffrdp->send_seq++; ffrdp->wait_snd++;
             ffrdp->cur_new_node = NULL;
             ffrdp->cur_new_size = 0;
-        } else{
+        }else{
             ffrdp->cur_new_tick = get_tick_count();
         }
     }
@@ -613,7 +623,7 @@ void ffrdp_update(void *ctxt)
     FFRDP_FRAME_NODE   *node    = NULL, *p = NULL, *t = NULL;
     struct sockaddr_in *dstaddr = NULL, srcaddr;
 #ifndef CC3200
-    uint16_t addrlen = sizeof(srcaddr);
+    uint32_t addrlen = sizeof(srcaddr);
 #else
     uint16_t addrlen = sizeof(srcaddr);
 #endif
@@ -669,7 +679,7 @@ void ffrdp_update(void *ctxt)
 
     if (ffrdp_sleep(ffrdp, FFRDP_SELECT_SLEEP) != 0) return;
     for (node=NULL;;) { // receive data
-        if (!node && !(node = frame_node_new(FFRDP_FRAME_TYPE_FEC2, FFRDP_MAX_MSS))) break;;
+        if (!node && !(node = frame_node_new(FFRDP_FRAME_TYPE_FEC2, FFRDP_MAX_MSS))) break;
         if ((ret = recvfrom(ffrdp->udp_fd, node->data, node->size, 0, (struct sockaddr*)&srcaddr, &addrlen)) <= 0) break;
         if ((ffrdp->flags & FLAG_SERVER) && (ffrdp->flags & FLAG_CONNECTED) == 0) {
             if (ffrdp->flags & FLAG_CONNECTED) {
@@ -700,7 +710,7 @@ void ffrdp_update(void *ctxt)
             }
         } else if (node->data[0] == FFRDP_FRAME_TYPE_QUERY) got_query = 1;
     }
-    if (node) free(node);
+    if (node)  free(node);
 
     if (got_data || got_query) ffrdp_recvdata_and_sendack(ffrdp, dstaddr); // send ack frame
     if (ffrdp->send_list_head && seq_distance(send_una, GET_FRAME_SEQ(ffrdp->send_list_head)) > 0) { // got ack frame
