@@ -77,64 +77,45 @@ done:
     return NULL;
 }
 
-static void* client_thread(void *param)
+
+static void* client_thread()
 {
-    uint8_t *sendbuf= malloc(client_max_send_size);
-    uint8_t *recvbuf= malloc(server_max_send_size);
-    void    *ffrdp  = NULL;
+    uint8_t *sendbuf= (uint8_t *)malloc(client_max_send_size);
+    uint8_t *recvbuf= (uint8_t *)malloc(server_max_send_size);
+    void    *eegRdp  = NULL;
     uint32_t tick_start, tick_recv, total_bytes;
     int      size, ret, connect_ok = 0;
 
-    
-    (void)param;
     if (!sendbuf || !recvbuf) {
         printf("client failed to allocate send or recv buffer !\n");
         goto done;
     }
 
+    for(int i = 0;i < 128;i ++){
+        sendbuf[i] = i;
+    }
+
     tick_start  = get_tick_count();
     total_bytes = 0;
     while (!g_exit) {
-        if (!ffrdp) {
-            ffrdp = ffrdp_init(client_cnnt_ip, client_cnnt_port, NULL, NULL, 0, 1280, 0);
-            if (!ffrdp) { usleep(100 * 1000); continue; }
+        if (!eegRdp) {
+            eegRdp = ffrdp_init(client_cnnt_ip, client_cnnt_port, NULL, NULL, 0, 128, 3);
+            if (!eegRdp) { usleep(100 * 1000); continue; }
         }
-        size = 1 + rand() % client_max_send_size;
+        size = 128;
 
-        ret = ffrdp_send(ffrdp, (char*)sendbuf, size);
+        ret = ffrdp_send(eegRdp, (char*)sendbuf, size);
         if (ret != size) {
-//          printf("client send data failed: %d\n", size);
+          printf("client send data failed: %d\n", size);
         }
-
-        ret = ffrdp_recv(ffrdp, (char*)recvbuf, server_max_send_size);
-        if (ret > 0) {
-            if (connect_ok == 0) {
-                connect_ok = 1;
-                printf("connect to server ok !\n");
-            }
-            tick_recv    = get_tick_count();
-            total_bytes += ret;
-            if ((int32_t)get_tick_count() - (int32_t)tick_start > 10 * 1000) {
-                pthread_mutex_lock(&g_mutex);
-                ffrdp_dump(ffrdp, 0);
-                pthread_mutex_unlock(&g_mutex);
-                tick_start = get_tick_count();
-                total_bytes= 0;
-            }
-        }
-
-        ffrdp_update(ffrdp);
-        if (connect_ok && get_tick_count() - tick_recv > 2000) {
-            printf("server lost !\n");
-            ffrdp_free(ffrdp); ffrdp = NULL;
-            connect_ok = 0;
-        }
+        ffrdp_update(eegRdp);
+        usleep(1000);
     }
 
 done:
     free(sendbuf);
     free(recvbuf);
-    ffrdp_free(ffrdp);
+    ffrdp_free(eegRdp);
     return NULL;
 }
 
