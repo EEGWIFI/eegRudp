@@ -80,20 +80,13 @@ void usleep(int pe){
 }
 
 //convet ip string to ip long
-unsigned long inet_addr(const char *str)
+unsigned long inet_addr(const char *pIP)
 {
-    unsigned long lHost = 0;
-    char *pLong = (char *)&lHost;
-    char substr[20] = { 0 };
-    strncpy(substr, str, sizeof(substr));
-    char *p = strtok(substr, ".");
-    while (p != NULL)
-    {
-        *pLong++ = atoi(p);
-        p = strtok(NULL, "."); // 获取下一个片段
-    }
-
-    return lHost;
+  unsigned int uiTmp[4] = {0};
+  unsigned long uiIp = 0;
+  sscanf(pIP,"%u.%u.%u.%u",&(uiTmp[3]),&(uiTmp[2]),&(uiTmp[1]),&(uiTmp[0]));
+  uiIp = ((uiTmp[0] << 24) | (uiTmp[1] << 16) | (uiTmp[2] << 8) | (uiTmp[3]));
+  return uiIp;
 }
 #endif
 
@@ -115,7 +108,7 @@ unsigned long inet_addr(const char *str)
 #define FFRDP_SELECT_TIMEOUT 10000
 #define FFRDP_USLEEP_TIMEOUT 1000
 #else
-#define FFRDP_MAX_MSS       (1500 - 8) // should align to 4 bytes and <= 1500 - 8
+#define FFRDP_MAX_MSS       (128) // should align to 4 bytes and <= 1500 - 8
 #define FFRDP_MIN_RTO        20
 #define FFRDP_MAX_RTO        2000
 #define FFRDP_MAX_WAITSND    32
@@ -340,6 +333,7 @@ static int ffrdp_sleep(FFRDPCONTEXT *ffrdp, int flag)
 
 static int ffrdp_send_data_frame(FFRDPCONTEXT *ffrdp, FFRDP_FRAME_NODE *frame, struct sockaddr_in *dstaddr)
 {
+    _i16 ret = 0;
     switch (frame->size - ffrdp->smss) {
     case 6 : ffrdp->counter_fec_tx ++; *(uint16_t*)(frame->data + 4 + ffrdp->smss) = ffrdp->fec_txseq++; break; // tx fec frame
     case 4 : ffrdp->counter_txfull ++; break; // tx full  frame
@@ -401,7 +395,7 @@ static int ffrdp_recv_data_frame(FFRDPCONTEXT *ffrdp, FFRDP_FRAME_NODE *frame)
 */
 
 
-void* ffrdp_init(char *ip, int port, char *txkey, char *rxkey, int server, int smss, int sfec)
+void* ffrdp_init(const char *ip,const int port, char *txkey, char *rxkey, int server, int smss, int sfec)
 {
 #ifdef WIN32
     WSADATA wsaData;
@@ -409,7 +403,6 @@ void* ffrdp_init(char *ip, int port, char *txkey, char *rxkey, int server, int s
     unsigned long opt;
     FFRDPCONTEXT *ffrdp = malloc(sizeof(FFRDPCONTEXT));
     if (!ffrdp) return NULL;
-
 #ifdef WIN32
     timeBeginPeriod(1);
     if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
@@ -441,7 +434,7 @@ void* ffrdp_init(char *ip, int port, char *txkey, char *rxkey, int server, int s
     ffrdp->send_list_tail = NULL;
     ffrdp->recv_list_head = NULL;
     ffrdp->recv_list_tail = NULL;
-
+    ffrdp->cur_new_size = 0;
     if (ffrdp->udp_fd < 0) {
         printf("failed to open socket !\n");
         goto failed;
@@ -520,7 +513,7 @@ int ffrdp_send(void *ctxt, char *buf, int len)
         if (!ffrdp->cur_new_node) ffrdp->cur_new_node = frame_node_new(ffrdp->fec_txredundancy, ffrdp->smss);
         if (!ffrdp->cur_new_node) break;
         else SET_FRAME_SEQ(ffrdp->cur_new_node, ffrdp->send_seq);
-        size = MIN(n, (int)(ffrdp->smss - ffrdp->cur_new_size));
+        size = MIN(n, (unsigned int)(ffrdp->smss - ffrdp->cur_new_size));
         memcpy(ffrdp->cur_new_node->data + 4 + ffrdp->cur_new_size, buf, size);
         ffrdp->cur_new_size += size; buf += size; n -= size;
         if (ffrdp->cur_new_size == ffrdp->smss) {
@@ -603,17 +596,18 @@ void ffrdp_update(void *ctxt)
     uint16_t addrlen = sizeof(srcaddr);
 #endif
     int32_t  ret, got_data = 0,i;
-
+    
+    int32_t node_cnt = 0;
+    
     if (!ctxt) return;
-    dstaddr  = ffrdp->flags & FLAG_SERVER ? &ffrdp->client_addr : &ffrdp->server_addr;
-
+    //dstaddr  = ffrdp->flags & FLAG_SERVER ? &ffrdp->client_addr : &ffrdp->server_addr;
+    dstaddr = &ffrdp->server_addr;
+    //send_list_head 为最老数据
     for (i=0,p=ffrdp->send_list_head; i<(int32_t)ffrdp->cwnd&&p; i++) {
-         if (ffrdp_send_data_frame(ffrdp, p, dstaddr) != 0){
-             break;
-         }
-         t = p; p = p->next; list_remove(&ffrdp->send_list_head, &ffrdp->send_list_tail, t); continue;
+         ffrdp_send_data_frame(ffrdp, p, dstaddr);
+         t = p; p = p->next; list_remove(&ffrdp->send_list_head, &ffrdp->send_list_tail, t); 
     }
-
+    
     if (ffrdp_sleep(ffrdp, FFRDP_SELECT_SLEEP) != 0) return;
     for (node=NULL;;) { // receive data
         if (!node && !(node = frame_node_new(FFRDP_FRAME_TYPE_FEC2, ffrdp->smss))) break;  //判断是否是空
@@ -637,8 +631,7 @@ void ffrdp_update(void *ctxt)
     }
     if (node)  free(node);
     if (got_data) ffrdp_recvdata_and_sendack(ffrdp, dstaddr); // send ack frame
-    usleep(1000);
-
+    //usleep(1000);
 }
 
 void ffrdp_flush(void *ctxt)
